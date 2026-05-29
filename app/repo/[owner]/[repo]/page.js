@@ -27,6 +27,26 @@ export default function RepoPage({ params }) {
     if (session) fetchFiles();
   }, [session]);
 
+  useEffect(() => {
+    if (session && owner && repo) {
+      checkIfAnalyzed();
+    }
+  }, [session, owner, repo]);
+
+  const checkIfAnalyzed = async () => {
+    const { data } = await fetch(`/api/repos/${owner}/${repo}/status`)
+      .then((r) => r.json())
+      .catch(() => ({ data: null }));
+
+    if (data?.analyzed) {
+      setAnalyzed(true);
+      setAnalyzeStatus(
+        `✅ Previously analyzed on ${new Date(data.analyzedAt).toLocaleDateString()}`,
+      );
+      fetchSummary();
+    }
+  };
+
   const fetchFiles = async () => {
     try {
       const res = await fetch(`/api/repos/${owner}/${repo}/files`);
@@ -40,9 +60,9 @@ export default function RepoPage({ params }) {
     }
   };
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (forceReanalyze = false) => {
     setAnalyzing(true);
-    setAnalyzeStatus("Fetching repository files...");
+    setAnalyzeStatus("Checking repository status...");
 
     try {
       setAnalyzeStatus(
@@ -52,7 +72,7 @@ export default function RepoPage({ params }) {
       const res = await fetch("/api/embed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ owner, repo }),
+        body: JSON.stringify({ owner, repo, forceReanalyze }),
       });
 
       const data = await res.json();
@@ -123,7 +143,7 @@ export default function RepoPage({ params }) {
             insights
           </p>
           <button
-            onClick={handleAnalyze}
+            onClick={() => handleAnalyze(false)}
             disabled={analyzing || analyzed}
             className={`font-semibold py-3 px-6 rounded-xl transition-all duration-200 
               ${
@@ -144,6 +164,19 @@ export default function RepoPage({ params }) {
             <p className="text-gray-400 text-sm mt-3">{analyzeStatus}</p>
           )}
         </div>
+        {analyzeStatus && (
+          <p className="text-gray-400 text-sm mt-3">{analyzeStatus}</p>
+        )}
+
+        {/* Re-analyze button — only shows after analysis */}
+        {analyzed && !analyzing && (
+          <button
+            onClick={() => handleAnalyze(true)}
+            className="ml-3 text-gray-400 hover:text-white text-sm border border-gray-700 hover:border-gray-500 px-4 py-3 rounded-xl transition-all duration-200 mt-3 mb-3"
+          >
+            🔄 Re-analyze
+          </button>
+        )}
 
         {/* Architecture Summary */}
         {summaryLoading && (

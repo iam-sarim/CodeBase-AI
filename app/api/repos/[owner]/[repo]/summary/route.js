@@ -11,33 +11,46 @@ export async function GET(request, { params }) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const repoName = `${owner}/${repo}`;
+
   try {
-    // Get a sample of chunks from the repo
-    const { data: chunks, error } = await supabase
+    // Check if summary already exists in DB
+    const { data: existing } = await supabase
+      .from("analyzed_repos")
+      .select("overview, tech_stack, architecture, folders, diagram")
+      .eq("repo_name", repoName)
+      .single();
+
+    if (existing?.overview) {
+      return Response.json({
+        overview: existing.overview,
+        techStack: existing.tech_stack,
+        architecture: existing.architecture,
+        folders: existing.folders,
+        diagram: existing.diagram,
+      });
+    }
+
+    // Generate fresh summary
+    const { data: chunks } = await supabase
       .from("code_chunks")
       .select("file_path, content")
-      .eq("repo_name", `${owner}/${repo}`)
+      .eq("repo_name", repoName)
       .limit(20);
-
-    if (error) throw error;
 
     if (!chunks || chunks.length === 0) {
       return Response.json(
-        {
-          error: "No data found. Please analyze the repository first.",
-        },
+        { error: "No data found. Please analyze the repository first." },
         { status: 404 },
       );
     }
 
-    // Build context from chunks
     const fileList = [...new Set(chunks.map((c) => c.file_path))].join("\n");
     const codeContext = chunks
       .slice(0, 10)
       .map((c) => `File: ${c.file_path}\n${c.content}`)
       .join("\n\n");
 
-    // Generate architecture summary
     const prompt = `You are an expert software architect. Analyze this GitHub repository and provide a structured summary.
 
 Repository: ${owner}/${repo}
@@ -59,18 +72,27 @@ Please provide a JSON response with exactly this structure (no markdown, pure JS
   "diagram": "graph TD\\n A[User] --> B[Frontend]\\n B --> C[Backend]\\n C --> D[Database]"
 }
 
-For the diagram field, create a Mermaid.js flowchart showing the main components and how they connect.
 Return ONLY the JSON, no other text.`;
 
     const answer = await generateAnswer(prompt);
-
-    // Clean and parse JSON
     const cleaned = answer
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
-
     const summary = JSON.parse(cleaned);
+
+    // Save summary to DB
+    await supabase
+      .from("analyzed_repos")
+      .update({
+        overview: summary.overview,
+        tech_stack: summary.techStack,
+        architecture: summary.architecture,
+        folders: summary.folders,
+        diagram: summary.diagram,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("repo_name", repoName);
 
     return Response.json(summary);
   } catch (error) {

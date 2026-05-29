@@ -28,7 +28,6 @@ const ALLOWED_EXTENSIONS = [
   ".json",
   ".yaml",
   ".yml",
-  ".env.example",
 ];
 
 const IGNORED_PATHS = [
@@ -48,10 +47,7 @@ function shouldProcessFile(filePath) {
     filePath.includes(ignored),
   );
   if (hasIgnoredPath) return false;
-  const hasAllowedExt = ALLOWED_EXTENSIONS.some((ext) =>
-    filePath.endsWith(ext),
-  );
-  return hasAllowedExt;
+  return ALLOWED_EXTENSIONS.some((ext) => filePath.endsWith(ext));
 }
 
 function chunkContent(content, filePath, chunkSize = 1500) {
@@ -85,6 +81,10 @@ function chunkContent(content, filePath, chunkSize = 1500) {
   return chunks;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function POST(request) {
   const session = await getServerSession(authOptions);
 
@@ -93,7 +93,7 @@ export async function POST(request) {
   }
 
   try {
-    const { owner, repo } = await request.json();
+    const { owner, repo, forceReanalyze } = await request.json();
 
     if (!owner || !repo) {
       return Response.json(
@@ -102,9 +102,28 @@ export async function POST(request) {
       );
     }
 
+    const repoName = `${owner}/${repo}`;
+
+    // Check if already analyzed
+    if (!forceReanalyze) {
+      const { data: existing } = await supabase
+        .from("analyzed_repos")
+        .select("id, analyzed_at, file_count")
+        .eq("repo_name", repoName)
+        .single();
+
+      if (existing) {
+        return Response.json({
+          success: true,
+          alreadyAnalyzed: true,
+          processedFiles: existing.file_count,
+          message: `Repository already analyzed on ${new Date(existing.analyzed_at).toLocaleDateString()}`,
+        });
+      }
+    }
+
     const octokit = getOctokit(session.accessToken);
 
-    // Step 1 - Get all files in the repo
     const { data: tree } = await octokit.git.getTree({
       owner,
       repo,
@@ -116,60 +135,38 @@ export async function POST(request) {
       (item) => item.type === "blob" && shouldProcessFile(item.path),
     );
 
-    // Step 2 - Delete old chunks for this repo if re-analyzing
-    await supabase
-      .from("code_chunks")
-      .delete()
-      .eq("repo_name", `${owner}/${repo}`);
+    // Delete old chunks
+    await supabase.from("code_chunks").delete().eq("repo_name", repoName);
 
-    // Step 3 - Fetch content, chunk, embed and store
     let processedCount = 0;
-    console.log(`Found ${filesToProcess.length} files to process`);
 
     for (const file of filesToProcess) {
       try {
-        console.log(`Processing: ${file.path}`);
-
         const { data: fileData } = await octokit.repos.getContent({
           owner,
           repo,
           path: file.path,
         });
 
-        if (!fileData.content || fileData.size > 100000) {
-          console.log(`Skipping ${file.path} - too large or no content`);
-          continue;
-        }
+        if (!fileData.content || fileData.size > 100000) continue;
 
         const content = Buffer.from(fileData.content, "base64").toString(
           "utf-8",
         );
-
-        if (content.trim().length === 0) {
-          console.log(`Skipping ${file.path} - empty file`);
-          continue;
-        }
+        if (content.trim().length === 0) continue;
 
         const chunks = chunkContent(content, file.path);
-        console.log(`${file.path} → ${chunks.length} chunks`);
 
         for (const chunk of chunks) {
-          console.log(`Embedding chunk from ${file.path}...`);
           const embedding = await generateEmbedding(chunk.content);
-          console.log(`Embedding generated, length: ${embedding.length}`);
+          await sleep(200);
 
-          const { error } = await supabase.from("code_chunks").insert({
-            repo_name: `${owner}/${repo}`,
+          await supabase.from("code_chunks").insert({
+            repo_name: repoName,
             file_path: chunk.file_path,
             content: chunk.content,
             embedding,
           });
-
-          if (error) {
-            console.error(`Supabase insert error:`, error);
-          } else {
-            console.log(`Stored chunk from ${file.path} ✅`);
-          }
         }
 
         processedCount++;
@@ -179,8 +176,22 @@ export async function POST(request) {
       }
     }
 
+    // Mark repo as analyzed
+    await supabase.from("analyzed_repos").upsert(
+      {
+        repo_name: repoName,
+        owner,
+        repo,
+        file_count: processedCount,
+        analyzed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "repo_name" },
+    );
+
     return Response.json({
       success: true,
+      alreadyAnalyzed: false,
       processedFiles: processedCount,
       totalFiles: filesToProcess.length,
       message: `Successfully analyzed ${processedCount} files`,
