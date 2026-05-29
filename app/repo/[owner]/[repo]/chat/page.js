@@ -9,20 +9,36 @@ export default function ChatPage({ params }) {
   const { owner, repo } = use(params);
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [messages, setMessages] = useState([
-    {
-      role: "assistant",
-      content: `Hi! I've analyzed the **${owner}/${repo}** repository. Ask me anything about the codebase!`,
-    },
-  ]);
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
+  const storageKey = `chat_${owner}_${repo}`;
+
+  // Load chat history from localStorage on page open
+  useEffect(() => {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      setMessages(JSON.parse(saved));
+    } else {
+      setMessages([
+        {
+          role: "assistant",
+          content: `Hi! I've analyzed **${owner}/${repo}**. Ask me anything about the codebase!`,
+        },
+      ]);
+    }
+  }, [owner, repo]);
+
+  // Save chat history to localStorage on every message
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem(storageKey, JSON.stringify(messages));
+    }
+  }, [messages]);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/");
-    }
+    if (status === "unauthenticated") router.push("/");
   }, [status]);
 
   useEffect(() => {
@@ -33,7 +49,8 @@ export default function ChatPage({ params }) {
     if (!input.trim() || loading) return;
 
     const userMessage = { role: "user", content: input };
-    setMessages((prev) => [...prev, userMessage]);
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setInput("");
     setLoading(true);
 
@@ -45,6 +62,7 @@ export default function ChatPage({ params }) {
           question: input,
           owner,
           repo,
+          history: updatedMessages.slice(-6),
         }),
       });
 
@@ -81,6 +99,17 @@ export default function ChatPage({ params }) {
     }
   };
 
+  const clearChat = () => {
+    const initial = [
+      {
+        role: "assistant",
+        content: `Hi! I've analyzed **${owner}/${repo}**. Ask me anything about the codebase!`,
+      },
+    ];
+    setMessages(initial);
+    localStorage.removeItem(storageKey);
+  };
+
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950">
@@ -92,19 +121,27 @@ export default function ChatPage({ params }) {
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col">
       {/* Header */}
-      <div className="border-b border-gray-800 px-6 py-4 flex items-center gap-4">
-        <button
-          onClick={() => router.push(`/repo/${owner}/${repo}`)}
-          className="text-gray-400 hover:text-white transition-colors"
-        >
-          ← Back
-        </button>
-        <div>
-          <h1 className="text-white font-semibold">
-            {owner}/{repo}
-          </h1>
-          <p className="text-gray-400 text-xs">AI Codebase Assistant</p>
+      <div className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => router.push(`/repo/${owner}/${repo}`)}
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            ← Back
+          </button>
+          <div>
+            <h1 className="text-white font-semibold">
+              {owner}/{repo}
+            </h1>
+            <p className="text-gray-400 text-xs">AI Codebase Assistant</p>
+          </div>
         </div>
+        <button
+          onClick={clearChat}
+          className="text-gray-500 hover:text-white text-xs border border-gray-700 px-3 py-1.5 rounded-lg transition-colors"
+        >
+          🗑️ Clear Chat
+        </button>
       </div>
 
       {/* Messages */}
