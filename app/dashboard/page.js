@@ -11,13 +11,16 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [repoUrl, setRepoUrl] = useState("");
   const [urlError, setUrlError] = useState("");
-
+  const [analyzedRepos, setAnalyzedRepos] = useState([]);
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
   }, [status]);
 
   useEffect(() => {
-    if (session) fetchRepos();
+    if (session) {
+      fetchRepos();
+      fetchAnalyzedRepos();
+    }
   }, [session]);
 
   const fetchRepos = async () => {
@@ -29,6 +32,15 @@ export default function Dashboard() {
       console.error("Error fetching repos:", error);
     } finally {
       setLoading(false);
+    }
+  };
+  const fetchAnalyzedRepos = async () => {
+    try {
+      const res = await fetch("/api/analyzed-repos");
+      const data = await res.json();
+      setAnalyzedRepos(data);
+    } catch (error) {
+      console.error("Error fetching analyzed repos:", error);
     }
   };
 
@@ -74,7 +86,7 @@ export default function Dashboard() {
           </div>
           <button
             onClick={() => signOut()}
-            className="text-gray-400 hover:text-white text-sm transition-colors border border-gray-700 px-3 py-1.5 rounded-lg"
+            className="text-gray-400 hover:text-white text-sm transition-colors border border-gray-700 px-3 py-1.5 rounded-lg cursor-pointer"
           >
             Sign out
           </button>
@@ -111,7 +123,43 @@ export default function Dashboard() {
             Works with any public GitHub repository
           </p>
         </div>
-
+        {/* Recently Analyzed */}
+        {analyzedRepos.length > 0 && (
+          <div className="mb-10">
+            <h2 className="text-white font-bold text-xl mb-6">
+              🕒 Recently Analyzed
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {analyzedRepos.map((repo) => (
+                <div
+                  key={repo.id}
+                  onClick={() =>
+                    router.push(`/repo/${repo.owner}/${repo.repo}`)
+                  }
+                  className="bg-gray-900 border border-blue-900 rounded-xl p-5 cursor-pointer hover:border-blue-500 hover:bg-gray-800 transition-all duration-200 group"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="text-white font-semibold group-hover:text-blue-400 transition-colors">
+                      {repo.repo}
+                    </h3>
+                    <span className="text-xs text-blue-400 bg-blue-950 px-2 py-1 rounded-full">
+                      ✅ Analyzed
+                    </span>
+                  </div>
+                  <p className="text-gray-500 text-xs mb-3">
+                    {repo.owner}/{repo.repo}
+                  </p>
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>📄 {repo.file_count} files</span>
+                    <span>
+                      🕒 {new Date(repo.analyzed_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Your Repos */}
         <div>
           <h2 className="text-white font-bold text-xl mb-6">
