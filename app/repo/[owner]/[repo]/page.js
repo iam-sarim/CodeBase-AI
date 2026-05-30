@@ -18,6 +18,7 @@ export default function RepoPage({ params }) {
   const [analyzeStatus, setAnalyzeStatus] = useState("");
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(true);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
@@ -34,16 +35,22 @@ export default function RepoPage({ params }) {
   }, [session, owner, repo]);
 
   const checkIfAnalyzed = async () => {
-    const { data } = await fetch(`/api/repos/${owner}/${repo}/status`)
-      .then((r) => r.json())
-      .catch(() => ({ data: null }));
+    setStatusLoading(true);
+    try {
+      const res = await fetch(`/api/repos/${owner}/${repo}/status`);
+      const { data } = await res.json();
 
-    if (data?.analyzed) {
-      setAnalyzed(true);
-      setAnalyzeStatus(
-        `✅ Previously analyzed on ${new Date(data.analyzedAt).toLocaleDateString()}`,
-      );
-      fetchSummary();
+      if (data?.analyzed) {
+        setAnalyzed(true);
+        setAnalyzeStatus(
+          `✅ Previously analyzed on ${new Date(data.analyzedAt).toLocaleDateString()}`,
+        );
+        fetchSummary();
+      }
+    } catch (error) {
+      console.error("Status check error:", error);
+    } finally {
+      setStatusLoading(false);
     }
   };
 
@@ -104,10 +111,13 @@ export default function RepoPage({ params }) {
     }
   };
 
-  if (status === "loading" || loading) {
+  if (status === "loading" || loading || statusLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <p className="text-white text-lg">Loading repository files...</p>
+        <div className="text-center space-y-3">
+          <p className="text-white text-lg">Loading repository...</p>
+          <p className="text-gray-500 text-sm">Checking analysis status</p>
+        </div>
       </div>
     );
   }

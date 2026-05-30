@@ -1,7 +1,10 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
-import { generateEmbedding, generateAnswer } from "@/lib/gemini";
+import { generateEmbedding } from "@/lib/gemini";
+import Groq from "groq-sdk";
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export async function POST(request) {
   const session = await getServerSession(authOptions);
@@ -11,7 +14,7 @@ export async function POST(request) {
   }
 
   try {
-    const { question, owner, repo } = await request.json();
+    const { question, owner, repo, history } = await request.json();
 
     if (!question || !owner || !repo) {
       return Response.json(
@@ -23,46 +26,58 @@ export async function POST(request) {
     // Step 1 — Embed the question
     const questionEmbedding = await generateEmbedding(question);
 
-    console.log("Question embedding length:", questionEmbedding.length);
-    console.log("Repo name being searched:", `${owner}/${repo}`);
-
-    // Step 2 — Find most relevant code chunks from Supabase
+    // Step 2 — Find most relevant code chunks
     const { data: chunks, error } = await supabase.rpc("match_code_chunks", {
       query_embedding: questionEmbedding,
       match_repo: `${owner}/${repo}`,
       match_count: 5,
     });
 
-    console.log("Supabase error:", error);
-
-    console.log("Chunks found:", chunks?.length);
-    console.log("First chunk:", chunks?.[0]);
-
     if (error) {
-      console.error("Supabase search error:", error);
       return Response.json({ error: error.message }, { status: 500 });
     }
 
-    // Step 3 — Build context from relevant chunks
+    // Step 3 — Build context from chunks
     const context = chunks
       .map(
         (chunk) => `File: ${chunk.file_path}\n\`\`\`\n${chunk.content}\n\`\`\``,
       )
       .join("\n\n");
 
-    // Step 4 — Ask Groq with the context
-    const prompt = `You are an expert code assistant helping developers understand a GitHub repository.
+    // Step 4 — Build conversation history for memory
+    const conversationHistory = (history || [])
+      .slice(-6)
+      .filter((msg) => msg.role === "user" || msg.role === "assistant")
+      .map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
 
-Here are the most relevant code snippets from the repository "${owner}/${repo}":
+    // Step 5 — Ask Groq with context + memory
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.3,
+      max_tokens: 1024,
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert code assistant helping developers understand the GitHub repository "${owner}/${repo}".
+
+Here are the most relevant code snippets for the current question:
 
 ${context}
 
-Based on the code above, please answer this question:
-${question}
+Use this code context to answer questions accurately. Reference specific files and functions when relevant. If the answer is not in the provided code, say so honestly. Remember the conversation history to provide contextual follow-up answers.`,
+        },
+        ...conversationHistory,
+        {
+          role: "user",
+          content: question,
+        },
+      ],
+    });
 
-Be specific and reference the actual code when answering. If the answer is not in the provided code snippets, say so honestly.`;
-
-    const answer = await generateAnswer(prompt);
+    const answer = completion.choices[0].message.content;
 
     return Response.json({
       answer,
