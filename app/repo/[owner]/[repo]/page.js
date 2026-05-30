@@ -19,6 +19,7 @@ export default function RepoPage({ params }) {
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [statusLoading, setStatusLoading] = useState(true);
+  const [repoError, setRepoError] = useState(null);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
@@ -58,15 +59,23 @@ export default function RepoPage({ params }) {
     try {
       const res = await fetch(`/api/repos/${owner}/${repo}/files`);
       const data = await res.json();
+
+      if (data.error) {
+        setRepoError(
+          `Repository "${owner}/${repo}" not found. Please check the URL and try again.`,
+        );
+        setLoading(false);
+        return;
+      }
+
       setFiles(data.files || []);
       setRepoInfo(data.repoInfo);
     } catch (error) {
-      console.error("Error fetching files:", error);
+      setRepoError("Something went wrong. Please check the URL and try again.");
     } finally {
       setLoading(false);
     }
   };
-
   const handleAnalyze = async (forceReanalyze = false) => {
     setAnalyzing(true);
     setAnalyzeStatus("Checking repository status...");
@@ -117,6 +126,25 @@ export default function RepoPage({ params }) {
         <div className="text-center space-y-3">
           <p className="text-white text-lg">Loading repository...</p>
           <p className="text-gray-500 text-sm">Checking analysis status</p>
+        </div>
+      </div>
+    );
+  }
+  if (repoError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950">
+        <div className="text-center space-y-4 max-w-md mx-auto px-4">
+          <div className="text-6xl">😕</div>
+          <h2 className="text-white text-2xl font-bold">
+            Repository Not Found
+          </h2>
+          <p className="text-gray-400">{repoError}</p>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-xl transition-all duration-200"
+          >
+            ← Back to Dashboard
+          </button>
         </div>
       </div>
     );
