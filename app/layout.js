@@ -11,6 +11,9 @@ const inter = Inter({
 export const metadata = {
   title: "Codebase Onboarding AI",
   description: "Understand any GitHub repository instantly",
+  icons: {
+    icon: "/icon.png",
+  },
 };
 
 export default function RootLayout({ children }) {
