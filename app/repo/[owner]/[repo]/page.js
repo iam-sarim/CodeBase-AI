@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { use } from "react";
+import Image from "next/image";
 
 export default function RepoPage({ params }) {
   const { owner, repo } = use(params);
@@ -298,26 +299,13 @@ export default function RepoPage({ params }) {
 
           {/* Repo identity */}
           <div className="flex items-center gap-2.5">
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{
-                background: "rgba(59,130,246,0.12)",
-                border: "1px solid rgba(59,130,246,0.25)",
-              }}
-            >
-              <svg
-                className="w-3.5 h-3.5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#3B82F6"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="16 18 22 12 16 6" />
-                <polyline points="8 6 2 12 8 18" />
-              </svg>
-            </div>
+            <Image
+              src="/codebaseai-logo.png"
+              alt="CodebaseAI"
+              width={200}
+              height={200}
+              className="h-7 sm:h-8 w-auto object-contain flex-shrink-0"
+            />
             <div>
               <h1
                 className="font-semibold text-sm leading-tight"

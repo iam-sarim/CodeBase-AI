@@ -3,6 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
@@ -102,34 +103,14 @@ export default function Dashboard() {
         }}
       >
         {/* Logo */}
-        <div className="flex items-center gap-2.5">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-            style={{
-              background: "rgba(59,130,246,0.12)",
-              border: "1px solid rgba(59,130,246,0.25)",
-            }}
-          >
-            <svg
-              className="w-4 h-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#3B82F6"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="16 18 22 12 16 6" />
-              <polyline points="8 6 2 12 8 18" />
-            </svg>
-          </div>
-          <span
-            className="font-bold text-base tracking-tight"
-            style={{ color: "#ffffff" }}
-          >
-            CodebaseAI
-          </span>
-        </div>
+        <Image
+          src="/codebaseai-logo-watermark.png"
+          width={500}
+          height={500}
+          alt="CodebaseAI"
+          className="object-contain"
+          style={{ height: "44px", width: "160px" }}
+        />
 
         {/* User area */}
         <div className="flex items-center gap-3">
