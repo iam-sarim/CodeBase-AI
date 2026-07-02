@@ -264,19 +264,13 @@ Contributions are welcome! Here's how to get started:
 4. Push to your branch: `git push origin feature/your-feature-name`
 5. Open a Pull Request
 
----
 
-## 📄 License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
----
 
 ## 👨‍💻 Author
 
 **Muhammad Sarim Awan**
 - GitHub: [@iam-sarim](https://github.com/iam-sarim)
-- Portfolio: [sarimawan.com](https://sarimawan.com)
+- Portfolio: [msarimawan.vercel.app](https://msarimawan.vercel.app)
 - Live Project: [codebaseai.vercel.app](https://codebaseai.vercel.app)
 
 ---
